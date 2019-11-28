@@ -13,7 +13,13 @@ def get_name(data):
 for fp in os.listdir():
     name = get_name(open(fp, 'rb').read())
     if name and name != fp:
-        print(fp, name)
-        shutil.move(fp, name)
+        try:
+            print(fp, name)
+            shutil.move(fp, name)
+        except:
+            pass
     else:
-        os.unlink(fp)
+        try:
+            os.unlink(fp)
+        except:
+            pass

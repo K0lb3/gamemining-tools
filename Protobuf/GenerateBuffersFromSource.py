@@ -1,10 +1,13 @@
 import os
 import re
 import subprocess
-
+import json
 
 def main():
-    src_path = input('Path to the source code folder that holds the source code that specifies the proto decoding.')
+    global enums
+    global configs
+
+    src_path = input('Path to the source code folder that holds the source code that specifies the proto decoding.\n')
     if not os.path.exists(src_path):
         print('Invalid path, you may have to replace \ with \\')
         main()
@@ -12,17 +15,26 @@ def main():
     configs, enums = CollectProtoData(src_path)
     print('Found %s buffers and %s enums'%(len(configs), len(enums)))
 
-    dst_path = input('Where do you want to save the buffer files?')
+    dst_path = input('Where do you want to save the buffer files?\n')
     os.makedirs(dst_path, exist_ok=True)
-    generateProtos(configs, enums, dst_path, dst_path+'_py')
 
+    os.makedirs(dst_path, exist_ok=True)
+    for key, items in configs.items():
+        if 'ConfigData' == key[:10]:
+            generateProto(key, items, dst_path)
 
-reProtoContract = re.compile(r'\[[^\]]*ProtoContract\(Name\s*=\s*"(.+?)"\)\]')
+    json.dump(configs, open(os.path.join(dst_path, 'configs.json'), 'wt', encoding = 'UTF8'), indent='\t')
+    json.dump(enums, open(os.path.join(dst_path, 'enums.json'), 'wt', encoding = 'UTF8'), indent='\t')
+    
+    if input('Do you want to convert the proto files to python modules? (y/n)\n').lower().strip(' ') == 'y':
+        generateProtoPy(dst_path, dst_path+'_py')
+
+reProtoContract = re.compile(r'ProtoContract\(Name\s*=\s*"(.+?)"\)')
 reProtoMember = re.compile(r"\s*\[ProtoMember\((\d+),\s*(.+?)\)\]")
-reProtoMemberKwargs = re.compile(r"\s*(.+?)\s*=(.+?)[,\)$]")
+reProtoMemberKwargs = re.compile(r"\s*(.+?)\s*=\s*(.+?)[,\)$]")
     #r'\s+\[ProtoMember\((\d+?),\s*DataFormat\s*=\s*DataFormat\.(.+?),\s*(IsRequired\s*=\s*true,\s*)?Name\s*=\s*"(.+?)"\)\]')
 reProtoMemberTyp = re.compile(r'\s*(public|privat)\s+(.+?)\s+(.+)')
-reProtoEnum = re.compile(r'\s+\[ProtoEnum\(Name\s*=\s*"(.+?)",\s*Value\s*=\s*(\d+)\)\]')
+reProtoEnum = re.compile(r'\s*\[ProtoEnum\(Name\s*=\s*"(.+?)",\s*Value\s*=\s*(\d+)\)\]')
 
 
 def CollectProtoData(mypath):
@@ -61,7 +73,7 @@ def CollectProtoData(mypath):
                                     # 2
                                     #	1-typ, 2-name
                                     match2 = reProtoMemberTyp.findall(f.readline())[0]
-                                    kwargs = {key:val.strip('"') for key,val in reProtoMemberKwargs.findall(match[2]+',')}
+                                    kwargs = {key:val.strip(' ').strip('"') for key,val in reProtoMemberKwargs.findall(match[2]+',')}
                                     configs[name][match[1]] = {
                                         'num': match[1],
                                         'name': kwargs['Name'],
@@ -74,20 +86,6 @@ def CollectProtoData(mypath):
             print('PermissionError')
 
     return (configs, enums)
-
-
-#   functions that convert the given data into protobuffers
-def generateProtos(ctypes, cenums, fpath, pypath=False):
-    global enums
-    global configs
-    enums = cenums
-    configs = ctypes
-    os.makedirs(fpath, exist_ok=True)
-    for key, items in ctypes.items():
-        if 'ConfigData' == key[:10]:
-            generateProto(key, items, fpath)
-    if pypath:
-        generateProtoPy(fpath, pypath)
 
 
 def generateProto(name, items, fpath):
@@ -131,7 +129,7 @@ def generateProtoVarType(var):
             typ = 'SUB%s' % typ
         else:
             if '.' in typ:
-                print(typ)
+                #print(typ)
                 var['type'] = typ.rsplit('.',1)[1]
                 return generateProtoVarType(var)
             print('Unknown Var Type,', typ)
@@ -187,6 +185,20 @@ def generateProtoMessage(key, items, syntax=2, _main=True, used_subs=[]):
             # print(key,'SUB',typ)
             ret.append(generateProtoMessage('SUB%s' % typ, configs[typ], _main=False, used_subs=used_subs))
             used_subs.append(typ)
+        else:
+            if '.' in typ:
+                typ = typ.rsplit('.',1)[1]
+                if typ in used_subs:
+                    # print(key,'SUB',typ)
+                    continue
+                if typ in enums:
+                    # print(key,'ENUM',typ)
+                    ret.append(generateProtoEnum(typ))
+                    used_subs.append(typ)
+                elif typ in configs:
+                    # print(key,'SUB',typ)
+                    ret.append(generateProtoMessage('SUB%s' % typ, configs[typ], _main=False, used_subs=used_subs))
+                    used_subs.append(typ)
 
     ret.extend([
         'message %s {' % key,
@@ -222,8 +234,8 @@ def generateProtoPy(src, dest):
                 os.path.join(src, fp)
             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
             )
-            if 'already defined' in str(result):
-                print(str(result)[str(result).find('stderr'):])
+            if result.returncode != 0 or result.stderr:
+                print(fp, result.stderr)
             else:
                 names.append(fp[:-6])
 
