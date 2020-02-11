@@ -5,10 +5,11 @@ import sys
 PATH = os.path.dirname(os.path.realpath(__file__))
 
 LAME = os.path.join(PATH, "lame", "lame.exe")
-ACBUNZIP = os.path.join(PATH, "DereTore", "AcbUnzip.exe")
 HCATOWAV = os.path.join(PATH, "DereTore", "hca2wav.exe")
 
 def convert_folder(src, dst=None):
+    src = "D:\\Disassemlby\\WarOfTheVisions\\download\\streaming"
+    dst = "D:\\Disassemlby\\WarOfTheVisions\\download\\streaming_ex_hca"
     if not dst:
         dst = src
     os.makedirs(dst, exist_ok=True)
@@ -18,11 +19,15 @@ def convert_folder(src, dst=None):
             fp = os.path.join(root, fp)
             if True:#if os.path.splitext(fp)[1] == ".acb":
                 try:
-                    print(fp,end="\t")
-                    if len(root) > len(src):
-                        acb_to_mp3(fp, os.path.join(dst, root[len(src)+1:]))
-                    else:
-                        acb_to_mp3(fp, dst)
+                    print(fp,end="\n")
+                    fp, extension = os.path.splitext(fp)
+                    name = os.path.basename(fp)
+                    if extension == ".hca":
+                        print(name,"hca to wav ", end = "")
+                        hca_to_wav(f"{fp}.hca")
+                        print(name," done\nwav to mp3 ", end = "")
+                        wav_to_mp3(f"{fp}.wav",os.path.join(dst, f"{name}.mp3"))
+                        print(name," done", end = "\n")
                 except AssertionError:
                     continue
     
@@ -92,6 +97,7 @@ def wav_to_mp3(src, dst):
 
 
 if __name__ == '__main__':
+    convert_folder("","")
     if len(sys.argv) != 3:
         convert_folder(
             input("src: "),

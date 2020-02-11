@@ -10,12 +10,19 @@ def get_name(data):
         return data[:index][::2].decode()
     return False
 
-for fp in os.listdir():
-    name = get_name(open(fp, 'rb').read())
+for fp in list(os.listdir()):
+    try:
+        name = get_name(open(fp, 'rb').read())
+        name, ext = os.path.splitext(name)
+    except:
+        continue
+    i=0
+    while os.path.exists(f"{name}{i}{ext}"):
+        i+=1
     if name and name != fp:
         try:
-            print(fp, name)
-            shutil.move(fp, name)
+            print(fp, f"{name}{i}{ext}")
+            shutil.move(fp, f"{name}{i}{ext}")
         except:
             pass
     else:
